@@ -196,4 +196,8 @@ SceneStringNames::SceneStringNames() {
 	parameters_base_path = "parameters/";
 
 	tracks_changed = "tracks_changed";
+	
+	state_enter= "state_enter";
+	state_exit= "state_exit";
+	state_changed= "state_changed";
 }

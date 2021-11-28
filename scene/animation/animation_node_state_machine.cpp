@@ -29,6 +29,7 @@
 /*************************************************************************/
 
 #include "animation_node_state_machine.h"
+#include "scene/scene_string_names.h"
 
 /////////////////////////////////////////////////
 
@@ -347,7 +348,7 @@ float AnimationNodeStateMachinePlayback::process(AnimationNodeStateMachine *p_st
 		if (p_state_machine->start_node != StringName() && p_seek && p_time == 0) {
 			current = p_state_machine->start_node;
 		}
-
+		emit_signal(SceneStringNames::get_singleton()->state_enter, current);
 		len_current = p_state_machine->blend_node(current, p_state_machine->states[current].node, 0, true, 1.0, AnimationNode::FILTER_IGNORE, false);
 		pos_current = 0;
 		loops_current = 0;
@@ -450,7 +451,7 @@ float AnimationNodeStateMachinePlayback::process(AnimationNodeStateMachine *p_st
 		}
 
 		if (goto_next) { //loops should be used because fade time may be too small or zero and animation may have looped
-
+			emit_signal(SceneStringNames::get_singleton()->state_exit, current);
 			if (next_xfade) {
 				//time to fade, baby
 				fading_from = current;
@@ -464,7 +465,10 @@ float AnimationNodeStateMachinePlayback::process(AnimationNodeStateMachine *p_st
 			if (path.size()) { //if it came from path, remove path
 				path.remove(0);
 			}
+			emit_signal(SceneStringNames::get_singleton()->state_changed, current, next);
+
 			current = next;
+			emit_signal(SceneStringNames::get_singleton()->state_enter, current);
 			if (switch_mode == AnimationNodeStateMachineTransition::SWITCH_MODE_SYNC) {
 				len_current = p_state_machine->blend_node(current, p_state_machine->states[current].node, 0, true, 0, AnimationNode::FILTER_IGNORE, false);
 				pos_current = MIN(pos_current, len_current);
@@ -497,6 +501,10 @@ void AnimationNodeStateMachinePlayback::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_current_play_position"), &AnimationNodeStateMachinePlayback::get_current_play_pos);
 	ClassDB::bind_method(D_METHOD("get_current_length"), &AnimationNodeStateMachinePlayback::get_current_length);
 	ClassDB::bind_method(D_METHOD("get_travel_path"), &AnimationNodeStateMachinePlayback::get_travel_path);
+
+	ADD_SIGNAL(MethodInfo(SceneStringNames::get_singleton()->state_enter, PropertyInfo(Variant::STRING, "state")));
+	ADD_SIGNAL(MethodInfo(SceneStringNames::get_singleton()->state_changed, PropertyInfo(Variant::STRING, "previous_state"), PropertyInfo(Variant::STRING, "next_state")));
+	ADD_SIGNAL(MethodInfo(SceneStringNames::get_singleton()->state_exit, PropertyInfo(Variant::STRING, "state")));
 }
 
 AnimationNodeStateMachinePlayback::AnimationNodeStateMachinePlayback() {

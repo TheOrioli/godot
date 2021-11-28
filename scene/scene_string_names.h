@@ -204,6 +204,10 @@ public:
 	StringName tracks_changed;
 
 	StringName _mesh_changed;
+
+	StringName state_enter;
+	StringName state_exit;
+	StringName state_changed;
 };
 
 #endif // SCENE_STRING_NAMES_H
