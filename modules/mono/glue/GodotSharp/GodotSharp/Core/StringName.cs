@@ -159,5 +159,7 @@ namespace Godot
         {
             return NativeValue.GetHashCode();
         }
+
+        public int GetSelfRefHashCode() => NativeValue.DangerousSelfRef.GetHashCode();
     }
 }

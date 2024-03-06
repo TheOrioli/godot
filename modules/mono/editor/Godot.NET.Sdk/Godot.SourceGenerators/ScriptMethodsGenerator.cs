@@ -169,6 +169,34 @@ namespace Godot.SourceGenerators
             }
 
             source.Append("    }\n"); // class GodotInternal
+            source.Append($"    private delegate void _MethodWrapperDelegate({symbol.NameWithTypeParameters()} target, NativeVariantPtrArgs args, out godot_variant ret);\n");
+                
+            source.Append("    private readonly global::System.Collections.Generic.Dictionary<int, (int argCount, _MethodWrapperDelegate wrapper)> methodCache = new()\n");
+            source.Append("    {\n");
+            foreach (var methodName in distinctMethodNames)
+            {
+                source.Append("        {\n");
+                source.Append("     MethodName.");
+                source.Append(methodName);
+                source.Append(".GetSelfRefHashCode(),\n        ("); // key
+                GodotMethodData targetMethod = default;
+                foreach (var m in godotClassMethods)
+                {
+                    if (m.Method.Name == methodName)
+                    {
+                        targetMethod = m;
+                        break;
+                    }
+                }
+                source.Append(" ");
+                source.Append(targetMethod.ParamTypes.Length); // value-argCount
+                source.Append(",\n"); // value-argCount
+                source.Append("   ");
+                GenerateMethodWrappingAction(symbol, targetMethod, source); // value-wrapper
+                source.Append(")");
+                source.Append("},\n");
+            }
+            source.Append("    };\n"); // field methodSet
 
             // Generate GetGodotMethodList
 
@@ -215,10 +243,7 @@ namespace Godot.SourceGenerators
                 source.Append("    protected override bool InvokeGodotClassMethod(in godot_string_name method, ");
                 source.Append("NativeVariantPtrArgs args, out godot_variant ret)\n    {\n");
 
-                foreach (var method in godotClassMethods)
-                {
-                    GenerateMethodInvoker(method, source);
-                }
+                GenerateInvokeWrapperCall(source);
 
                 source.Append("        return base.InvokeGodotClassMethod(method, args, out ret);\n");
 
@@ -255,7 +280,10 @@ namespace Godot.SourceGenerators
                 source.Append("    /// <inheritdoc/>\n");
                 source.Append("    [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]\n");
                 source.Append("    protected override bool HasGodotClassMethod(in godot_string_name method)\n    {\n");
-
+                // source.Append("    GD.PrintS(GetType(), method.GetHashCode(), methodCache != null && methodCache.ContainsKey(method.GetHashCode()), StringName.CreateTakingOwnershipOfDisposableValue(method).ToString());\n");
+                source.Append("        if (methodCache != null && methodCache.ContainsKey(method.GetHashCode())) return true;\n");
+                source.Append("        return base.HasGodotClassMethod(method);\n");
+                
                 bool isFirstEntry = true;
                 foreach (string methodName in distinctMethodNames)
                 {
@@ -476,6 +504,61 @@ namespace Godot.SourceGenerators
             }
 
             source.Append("        }\n");
+        }
+
+         private static void GenerateInvokeWrapperCall(StringBuilder source)
+        {
+            source.Append("        if (!methodCache.ContainsKey(method.GetHashCode())) return base.InvokeGodotClassMethod(method, args, out ret);\n\n");
+            source.Append("        var val = methodCache[method.GetHashCode()];\n");
+            source.Append("        if (val.argCount != args.Count) return base.InvokeGodotClassMethod(method, args, out ret); \n\n");
+            source.Append("        val.wrapper.Invoke(this, args, out ret);\n");
+            source.Append("        return true;\n");
+        }
+
+        private static void GenerateMethodWrappingAction(
+            INamedTypeSymbol symbol,
+            GodotMethodData method,
+            StringBuilder source
+        )
+        {
+            string methodName = method.Method.Name;
+            source.Append($"    ({symbol.NameWithTypeParameters()} target, NativeVariantPtrArgs args, out godot_variant ret) => {{");
+            source.Append("\n");
+            if (method.RetType != null)
+                source.Append("            var callRet = ");
+            else
+                source.Append("            ");
+            
+            if (!method.Method.IsStatic)
+                source.Append("target.");
+            source.Append(methodName);
+            source.Append("(");
+
+            for (int i = 0; i < method.ParamTypes.Length; i++)
+            {
+                if (i != 0)
+                    source.Append(", ");
+
+                source.AppendNativeVariantToManagedExpr(string.Concat("args[", i.ToString(), "]"),
+                    method.ParamTypeSymbols[i], method.ParamTypes[i]);
+            }
+
+            source.Append(");\n");
+
+            if (method.RetType != null)
+            {
+                source.Append("            ret = ");
+
+                source.AppendManagedToNativeVariantExpr("callRet",
+                    method.RetType.Value.TypeSymbol, method.RetType.Value.MarshalType);
+                source.Append(";\n");
+            }
+            else
+            {
+                source.Append("            ret = default;\n");
+            }
+
+            source.Append("        }");
         }
     }
 }
